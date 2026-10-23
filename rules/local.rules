@@ -1,0 +1,35 @@
+# suricata-ids-lab custom rules
+# Local SIDs use the 1000000-1999999 range. $HOME_NET / $EXTERNAL_NET come from suricata.yaml.
+
+# --- Reconnaissance -----------------------------------------------------------------------------
+
+# TCP SYN scan: one source sends 20+ bare SYNs to the home net within 10 seconds (T1046)
+alert tcp any any -> $HOME_NET any (msg:"LAB RECON Possible TCP SYN port scan"; flow:stateless; flags:S,12; threshold:type both, track by_src, count 20, seconds 10; classtype:attempted-recon; metadata:mitre_technique_id T1046; sid:1000001; rev:1;)
+
+# Nmap NULL scan: TCP packet with no flags set (T1046)
+alert tcp any any -> $HOME_NET any (msg:"LAB RECON TCP NULL scan"; flow:stateless; flags:0; threshold:type limit, track by_src, count 1, seconds 60; classtype:attempted-recon; metadata:mitre_technique_id T1046; sid:1000002; rev:1;)
+
+# Nmap XMAS scan: FIN, PSH and URG set (T1046)
+alert tcp any any -> $HOME_NET any (msg:"LAB RECON TCP XMAS scan"; flow:stateless; flags:FPU,12; threshold:type limit, track by_src, count 1, seconds 60; classtype:attempted-recon; metadata:mitre_technique_id T1046; sid:1000003; rev:1;)
+
+# ICMP ping sweep: 10+ echo requests from one source in 5 seconds (T1018)
+alert icmp any any -> $HOME_NET any (msg:"LAB RECON ICMP ping sweep"; itype:8; threshold:type both, track by_src, count 10, seconds 5; classtype:attempted-recon; metadata:mitre_technique_id T1018; sid:1000004; rev:1;)
+
+# --- Credential access ---------------------------------------------------------------------------
+
+# SSH brute force: 6+ new SSH connections from one source to one server in 60 seconds (T1110)
+alert tcp any any -> $HOME_NET 22 (msg:"LAB CRED Possible SSH brute force"; flow:to_server; flags:S,12; threshold:type both, track by_src, count 6, seconds 60; classtype:attempted-admin; metadata:mitre_technique_id T1110; sid:1000010; rev:1;)
+
+# FTP login with a cleartext password over the network (T1552 credential exposure)
+alert tcp any any -> $HOME_NET 21 (msg:"LAB POLICY Cleartext FTP password sent"; flow:to_server,established; content:"PASS "; depth:5; nocase; classtype:policy-violation; metadata:mitre_technique_id T1552; sid:1000011; rev:1;)
+
+# --- Policy / suspicious traffic -----------------------------------------------------------------
+
+# Telnet session to an internal host (insecure remote admin) (T1021)
+alert tcp any any -> $HOME_NET 23 (msg:"LAB POLICY Telnet connection to internal host"; flow:to_server; flags:S,12; classtype:policy-violation; metadata:mitre_technique_id T1021; sid:1000020; rev:1;)
+
+# DNS query for a domain on a TLD frequently abused for malware (T1071.004)
+alert dns $HOME_NET any -> any any (msg:"LAB DNS Query to commonly abused TLD"; dns.query; pcre:"/\.(zip|mov|top|xyz|click)$/i"; classtype:bad-unknown; metadata:mitre_technique_id T1071.004; sid:1000030; rev:1;)
+
+# HTTP request with a scripting-tool User-Agent leaving the network (T1105)
+alert http $HOME_NET any -> $EXTERNAL_NET any (msg:"LAB HTTP Outbound request with PowerShell/curl/wget User-Agent"; flow:to_server,established; http.user_agent; pcre:"/(WindowsPowerShell|curl\/|Wget\/)/i"; classtype:policy-violation; metadata:mitre_technique_id T1105; sid:1000040; rev:1;)
